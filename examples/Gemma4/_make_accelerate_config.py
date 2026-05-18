@@ -57,21 +57,23 @@ def make_configs(
         "zero_optimization": {
             "stage": zero_stage,
             "allgather_partitions": True,
-            "allgather_bucket_size": 5e8,
+            "allgather_bucket_size": 5e7,
             "reduce_scatter": True,
-            "reduce_bucket_size": 5e8,
+            "reduce_bucket_size": 5e7,
             "overlap_comm": True,
             "contiguous_gradients": True,
-            "cpu_offload": cpu_offload,
         },
         "gradient_clipping": 1.0,
         "steps_per_print": 10,
     }
+    if cpu_offload:
+        # DeepSpeed >=0.14 dropped the legacy top-level `cpu_offload` flag;
+        # use `offload_optimizer` (stage 2/3) and `offload_param` (stage 3).
+        ds_cfg["zero_optimization"]["offload_optimizer"] = {"device": "cpu", "pin_memory": True}
+        if zero_stage == 3:
+            ds_cfg["zero_optimization"]["offload_param"] = {"device": "cpu", "pin_memory": True}
     if zero_stage == 3:
         ds_cfg["zero_optimization"]["stage3_gather_16bit_weights_on_model_save"] = True
-        if cpu_offload:
-            ds_cfg["zero_optimization"]["offload_param"] = {"device": "cpu", "pin_memory": True}
-            ds_cfg["zero_optimization"]["offload_optimizer"] = {"device": "cpu", "pin_memory": True}
     with open(ds_path, "w") as f:
         json.dump(ds_cfg, f, indent=2)
 

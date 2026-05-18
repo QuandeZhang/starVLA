@@ -35,16 +35,27 @@ cp "$0" "${RUN_ROOT_DIR}/${RUN_ID}/" || true
 
 # NCCL / CUDA env
 export CUDA_VISIBLE_DEVICES="${GPU_IDS}"
+# Pin DeepSpeed JIT (CPU Adam etc.) to a CUDA toolkit matching torch (cu128).
+# System default /usr/local/cuda points to 13.1 which fails the major-match check.
+export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda-12.9}"
+export PATH="${CUDA_HOME}/bin:${PATH}"
+# DS rejects even minor version skew (12.9 vs torch's 12.8). ABI is compatible.
+export DS_SKIP_CUDA_CHECK=1
 export NCCL_BLOCKING_WAIT=1
 export NCCL_ASYNC_ERROR_HANDLING=1
 export NCCL_TIMEOUT=10000
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
+CPU_OFFLOAD="${CPU_OFFLOAD:-0}"
+OFFLOAD_FLAG=""
+[ "${CPU_OFFLOAD}" = "1" ] && OFFLOAD_FLAG="--cpu-offload"
+
 # Generate accelerate + DeepSpeed config (reuses Gemma4 helper)
 ACCEL_CONFIG=$(python3 examples/Gemma4/_make_accelerate_config.py \
     --grad-accum "${GRAD_ACCUM}" \
     --num-processes "${NUM_GPUS}" \
-    --zero-stage "${ZERO_STAGE}")
+    --zero-stage "${ZERO_STAGE}" \
+    ${OFFLOAD_FLAG})
 echo "[indoor-uav] generated accelerate config: ${ACCEL_CONFIG}"
 
 echo "[indoor-uav] GPU_IDS=${GPU_IDS}  NUM_GPUS=${NUM_GPUS}  ZERO_STAGE=${ZERO_STAGE}"
